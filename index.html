@@ -4,6 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#FFFFFF">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script>
+/* Draw the home-screen icon with this phone's own bee emoji (the Apple bee on an iPhone). Falls back to apple-touch-icon.png. */
+(function () {
+  try {
+    var S = 180, c = document.createElement("canvas"); c.width = c.height = S;
+    var g = c.getContext("2d"), r = g.createRadialGradient(S * .3, S * .25, 10, S * .5, S * .5, S * .75);
+    r.addColorStop(0, "#5BA67E"); r.addColorStop(.6, "#3F8A63"); r.addColorStop(1, "#336F50");
+    g.fillStyle = r; g.fillRect(0, 0, S, S);
+    g.textAlign = "center"; g.textBaseline = "middle";
+    g.font = "112px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
+    g.fillText("\uD83D\uDC1D", S / 2, S / 2 + 6);
+    var url = c.toDataURL("image/png");
+    if (url.length > 2000) document.querySelector('link[rel="apple-touch-icon"]').href = url;
+  } catch (e) {}
+})();
+</script>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Agenda">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Maya's agenda</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -374,6 +397,32 @@ body { -webkit-tap-highlight-color: transparent; }
 .page { overflow-x: clip; }
 #main { touch-action: pan-y; will-change: transform; }
 
+/* iPhone Safari: empty date/time inputs collapse and overlap. Give every field a fixed height. */
+input[type=date], input[type=time], input[type=text], input:not([type]), input[type=password], select {
+  -webkit-appearance: none; appearance: none; min-height: 44px; line-height: 1.3; display: block; max-width: 100%; box-sizing: border-box; }
+input[type=date], input[type=time] { width: 100%; min-width: 0; text-align: left; }
+input[type=date]::-webkit-date-and-time-value, input[type=time]::-webkit-date-and-time-value { text-align: left; min-height: 1.3em; }
+select { background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%) !important;
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50% !important; background-size: 5px 5px !important; background-repeat: no-repeat !important; padding-right: 32px !important; }
+.plan input[type=date], .plan input[type=time], .plan select { width: auto; min-width: 140px; display: inline-block; }
+.quick input, .newcat input:not([type=color]) { display: block; }
+input[type=color] { min-height: 0; -webkit-appearance: none; appearance: none; }
+.field { align-content: start; }
+@media (max-width: 560px) {
+  .fields { grid-template-columns: minmax(0, 1fr) !important; }
+  .field.full { grid-column: auto; }
+}
+.timeline { cursor: copy; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+.tl-hint { font-size: 12px; color: var(--muted); font-weight: 600; padding: 0 16px 8px; margin-top: -2px; }
+.mpill { text-transform: none; white-space: normal; overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-align: left; padding: 3px 6px; font-weight: 600; }
+@media (max-width: 640px) { .mpill { padding: 2px 3px; font-size: 10px; line-height: 1.2; text-align: center; } }
+/* Add/edit window: always fully visible and scrollable, also on phones */
+.overlay { align-items: flex-start !important; overscroll-behavior: contain; }
+.overlay > .modal { margin: 0 auto; flex: none; }
+@media (max-width: 760px) {
+  .overlay { padding: calc(env(safe-area-inset-top, 0px) + 12px) 10px calc(env(safe-area-inset-bottom, 0px) + 12px) !important; }
+  .overlay > .modal { margin-top: auto; border-radius: 22px; }
+}
 /* Calm overrides */
 body { background-image: none; }
 header.top { box-shadow: none; border-bottom: 1px solid var(--line); }
@@ -491,6 +540,17 @@ header .btn.primary { background: var(--accent); border-color: var(--accent); co
 .mcell:hover { border-color: var(--accent); background: var(--surface); }
 .mcell.is-today { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border: 1.5px solid var(--accent); }
 @media (max-width: 640px) { .month { gap: 3px; } .mcell, .mcell.out { border-radius: 7px; } }
+
+/* Month: show what is planned (titles), wrap to two lines */
+.mcell .mpill { text-transform: none; white-space: normal; overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-overflow: clip; text-align: left; padding: 3px 6px; font-weight: 600; }
+@media (max-width: 640px) { .mcell .mpill { padding: 2px 2px 2px 3px; font-size: 9.5px; line-height: 1.2; text-align: left; letter-spacing: -.01em; } }
+
+/* Day timeline: text always at the top of the block */
+.timeline .block { display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch; text-align: left; }
+.timeline .block .t, .timeline .block .n { display: block; }
+
+.brand[data-act="home"] { cursor: pointer; -webkit-user-select: none; user-select: none; }
+.brand[data-act="home"]:active { opacity: .7; }
 </style>
 
 </head>
@@ -509,7 +569,7 @@ header .btn.primary { background: var(--accent); border-color: var(--accent); co
 </div>
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><span class="bee" aria-hidden="true">🐝</span>Maya's agenda</div>
+    <div class="brand" data-act="home" role="button" tabindex="0" title="Naar vandaag" aria-label="Maya's agenda, naar de dagplanning van vandaag"><span class="bee" aria-hidden="true">🐝</span>Maya's agenda</div>
     <nav class="tabs" id="tabs" aria-label="Weergave">
       <button data-act="view" data-view="dag">Dag</button>
       <button data-act="view" data-view="week">Week</button>
@@ -770,12 +830,10 @@ function viewMonth() {
       const k = addDays(ws, i), d = parse(k);
       // one pill per category: deadlines first, then planned activities
       const its = onDay(k, ["event", "deadline"]).sort((a, b) => (b.kind === "deadline") - (a.kind === "deadline") || byTime(a, b));
-      const seen = new Set(), pills = [];
-      its.forEach(it => { const kk = it.kind + "|" + it.cat; if (!seen.has(kk)) { seen.add(kk); pills.push(it); } });
-      const shown = pills.slice(0, 4);
-      html += `<div class="mcell${d.getMonth() !== c.getMonth() ? " out" : ""}${k === today ? " is-today" : ""}${i >= 5 ? " wkend" : ""}" data-act="goto" data-date="${k}" role="button" tabindex="0" aria-label="${esc(fmtLong(k) + (pills.length ? ": " + pills.map(p => (p.kind === "deadline" ? "deadline " : "") + (CAT[p.cat]?.label || "")).join(", ") : ""))}">
+      const pills = its, shown = pills.slice(0, 4);
+      html += `<div class="mcell${d.getMonth() !== c.getMonth() ? " out" : ""}${k === today ? " is-today" : ""}${i >= 5 ? " wkend" : ""}" data-act="goto" data-date="${k}" role="button" tabindex="0" aria-label="${esc(fmtLong(k) + (pills.length ? ": " + pills.map(p => (p.kind === "deadline" ? "deadline " : "") + p.title).join(", ") : ""))}">
         <span class="dnum">${d.getDate()}</span>
-        ${shown.map(it => `<span class="mpill cat-${esc(it.cat)}${it.kind === "deadline" ? " dl" : ""}">${it.kind === "deadline" ? "⚑ " : ""}${esc(CAT[it.cat]?.label || "Overig")}</span>`).join("")}
+        ${shown.map(it => `<span class="mpill cat-${esc(it.cat)}${it.kind === "deadline" ? " dl" : ""}">${it.kind === "deadline" ? "⚑ " : ""}${esc(it.title)}</span>`).join("")}
         ${pills.length > 4 ? `<span class="more">+${pills.length - 4}</span>` : ""}</div>`;
     }
   }
@@ -847,7 +905,7 @@ function viewDay() {
   html += `<div class="daygrid">
     <section class="panel plan-col"><div class="panel-h"><h2>Planning</h2><button class="btn small" data-act="new" data-date="${k}" data-kind="event" ${state.readOnly ? "disabled" : ""}>+ Activiteit</button></div>
       ${allday.length ? `<div class="allday"><span class="eyebrow">Hele dag</span>${allday.map(it => chip(it)).join("")}</div>` : ""}
-      <div class="timeline">${tl}</div></section>
+      <div class="tl-hint">${matchMedia("(hover: none)").matches ? "Dubbeltik" : "Dubbelklik"} op een tijd om iets toe te voegen</div><div class="timeline">${tl}</div></section>
     <div style="display:grid;gap:16px;min-width:0">
       <section class="panel"><div class="panel-h"><h2>Te doen</h2><button class="btn small" data-act="new" data-date="${k}" data-kind="task" ${state.readOnly ? "disabled" : ""}>+ Taak met details</button></div>
         <div class="panel-b">${tk.length ? progress(tk) : ""}
@@ -1170,7 +1228,8 @@ document.addEventListener("click", e => {
     return;
   }
   const act = a.dataset.act;
-  if (act === "view") setView(a.dataset.view);
+  if (act === "home") { closeModal(); state.cursor = todayKey(); setView("dag"); }
+  else if (act === "view") setView(a.dataset.view);
   else if (act === "prev") slide(-1);
   else if (act === "next") slide(1);
   else if (act === "logout") { try { localStorage.removeItem(LS_LOGIN); sessionStorage.removeItem(LS_LOGIN); } catch (e) {} closeModal(); lock(); }
@@ -1229,6 +1288,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && !document.getElementById("overlay").hidden) closeModal();
+  if ((e.key === "Enter" || e.key === " ") && e.target.dataset && e.target.dataset.act === "home") { e.preventDefault(); e.target.click(); }
   if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("mcell")) { e.preventDefault(); e.target.click(); }
 });
 document.addEventListener("change", e => {
@@ -1323,6 +1383,32 @@ document.addEventListener("submit", e => {
 window.addEventListener("hashchange", () => { const v = location.hash.slice(1); if (VIEWS.includes(v) && v !== state.view) { state.view = v; render(); } });
 // keep the "now" line and relative labels fresh
 setInterval(() => { if (state.view === "dag" && document.getElementById("overlay").hidden && !document.activeElement.closest("form")) render(); }, 60000);
+
+/* ---------- double-click (or double-tap) on the day timeline adds an item at that time ---------- */
+function addAtTime(tl, clientY) {
+  if (state.readOnly) return;
+  const hourEl = tl.querySelector(".hour"), H = hourEl ? hourEl.getBoundingClientRect().height : 52;
+  const y = clientY - tl.getBoundingClientRect().top;
+  let m = DAY_START * 60 + Math.floor((y / H) * 2) * 30;
+  m = Math.max(DAY_START * 60, Math.min(m, 23 * 60));
+  const e = Math.min(m + 60, 23 * 60 + 59);
+  const it = blank("event", state.cursor);
+  it.start = `${pad(Math.floor(m / 60))}:${pad(m % 60)}`; it.end = `${pad(Math.floor(e / 60))}:${pad(e % 60)}`;
+  openModal(it);
+}
+document.addEventListener("dblclick", e => {
+  const tl = e.target.closest(".timeline"); if (!tl || e.target.closest(".block")) return;
+  e.preventDefault(); addAtTime(tl, e.clientY);
+});
+(() => {
+  let last = 0, lx = 0, ly = 0;
+  document.addEventListener("touchend", e => {
+    const tl = e.target.closest && e.target.closest(".timeline"); if (!tl || e.target.closest(".block")) { last = 0; return; }
+    const t = e.changedTouches[0], now = Date.now();
+    if (now - last < 350 && Math.abs(t.clientX - lx) < 30 && Math.abs(t.clientY - ly) < 30) { last = 0; e.preventDefault(); addAtTime(tl, t.clientY); }
+    else { last = now; lx = t.clientX; ly = t.clientY; }
+  }, { passive: false });
+})();
 
 /* ---------- app-like swipe: content follows the finger ---------- */
 const SWIPE_VIEWS = ["dag", "week", "maand", "todos"];
