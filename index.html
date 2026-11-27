@@ -5,24 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#FFFFFF">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<script>
-/* Draw the home-screen icon with this phone's own bee emoji (the Apple bee on an iPhone). Falls back to apple-touch-icon.png. */
-(function () {
-  try {
-    var S = 180, c = document.createElement("canvas"); c.width = c.height = S;
-    var g = c.getContext("2d"), r = g.createRadialGradient(S * .3, S * .25, 10, S * .5, S * .5, S * .75);
-    r.addColorStop(0, "#5BA67E"); r.addColorStop(.6, "#3F8A63"); r.addColorStop(1, "#336F50");
-    g.fillStyle = r; g.fillRect(0, 0, S, S);
-    g.textAlign = "center"; g.textBaseline = "middle";
-    g.font = "112px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
-    g.fillText("\uD83D\uDC1D", S / 2, S / 2 + 6);
-    var url = c.toDataURL("image/png");
-    if (url.length > 2000) document.querySelector('link[rel="apple-touch-icon"]').href = url;
-  } catch (e) {}
-})();
-</script>
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=4">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=4">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Agenda">
@@ -560,10 +544,10 @@ header .btn.primary { background: var(--accent); border-color: var(--accent); co
     <div class="login-logo"><span class="bee" aria-hidden="true">🐝</span></div>
     <h1>Welkom terug</h1>
     <p class="muted">Log in om je agenda te openen.</p>
-    <div class="field"><label for="l-user">Gebruikersnaam</label><input id="l-user" name="username" autocomplete="username" autocapitalize="off" required></div>
+    <div class="field"><label for="l-user">E-mailadres</label><input id="l-user" name="username" type="email" inputmode="email" autocomplete="username" autocapitalize="off" spellcheck="false" required></div>
     <div class="field"><label for="l-pass">Wachtwoord</label><div class="pw"><input id="l-pass" name="password" type="password" autocomplete="current-password" required><button type="button" class="btn small ghost" data-act="pw-toggle">Toon</button></div></div>
     <label class="switch"><input type="checkbox" id="l-remember" checked> Ingelogd blijven op dit apparaat</label>
-    <p class="login-err" id="login-err" hidden>Gebruikersnaam of wachtwoord klopt niet. Probeer het opnieuw.</p>
+    <p class="login-err" id="login-err" hidden>E-mailadres of wachtwoord klopt niet. Probeer het opnieuw.</p>
     <button class="btn primary" style="justify-content:center;padding-block:11px">Inloggen</button>
   </form>
 </div>
@@ -603,6 +587,9 @@ header .btn.primary { background: var(--accent); border-color: var(--accent); co
 <div class="overlay" id="overlay" hidden></div>
 <div class="toast" id="toast" hidden></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 (() => {
 "use strict";
@@ -714,26 +701,76 @@ function useLocal() {
   try { state.items = JSON.parse(localStorage.getItem(LS_KEY) || "{}") || {}; } catch (e) { state.items = {}; }
   render();
 }
-async function initStore() {
-  if (!window.claude || typeof window.claude.use !== "function") return useLocal();
-  let db = null, user = null, id = null;
-  try { [db, user] = await Promise.all([window.claude.use("db"), window.claude.use("user")]); } catch (e) {}
-  try { id = user ? await user.id() : null; } catch (e) {}
-  if (!db || !id) return useLocal();
-  try { col = db.collection("data/users/" + id); } catch (e) { return useLocal(); }
+/* Online opslag via Firebase: users/<uid>/items/<id>, categorieën in users/<uid>/items/_settings */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD_kis_juTWil9NxIiwde4tSpAtORJENyw",
+  authDomain: "maya-aga.firebaseapp.com",
+  projectId: "maya-aga",
+  storageBucket: "maya-aga.firebasestorage.app",
+  messagingSenderId: "109558750139",
+  appId: "1:109558750139:web:4d6fd7ec81a356e5dc829e"
+};
+let fbAuth = null, fbDb = null, unsubSync = null;
+function initFirebase() {
+  if (fbAuth) return true;
+  if (!window.firebase) return false;
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    fbAuth = firebase.auth(); fbDb = firebase.firestore();
+    fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {});
+    return true;
+  } catch (e) { return false; }
+}
+// Moves planning that was saved only on this device into the online storage, once.
+function migrateLocal(cloudIds, hasCloudCats) {
+  let local = null, localCats = null;
+  try { local = JSON.parse(localStorage.getItem(LS_KEY) || "null"); localCats = JSON.parse(localStorage.getItem(LS_CATS) || "null"); } catch (e) {}
+  let n = 0;
+  if (local && typeof local === "object") Object.values(local).forEach(it => { if (it && it.id && !cloudIds.has(it.id)) { save(it); n++; } });
+  if (localCats && !hasCloudCats) { setCats(localCats); saveCats(); }
+  try {
+    if (local) { localStorage.setItem(LS_KEY + "-backup", JSON.stringify(local)); localStorage.removeItem(LS_KEY); }
+    if (localCats) { localStorage.setItem(LS_CATS + "-backup", JSON.stringify(localCats)); localStorage.removeItem(LS_CATS); }
+  } catch (e) {}
+  if (n) toast(`${n} ${n === 1 ? "item" : "items"} van dit apparaat online gezet`);
+}
+function startSync(uid) {
+  if (unsubSync) unsubSync();
+  col = fbDb.collection("users").doc(uid).collection("items");
+  state.mode = "loading"; state.items = {}; render();
   let first = true;
   const timer = setTimeout(() => { if (first) { state.slow = true; render(); } }, 10000);
-  col.onSnapshot(snap => {
-    const next = {};
-    let cats = null;
+  unsubSync = col.onSnapshot({ includeMetadataChanges: false }, snap => {
+    const next = {}; let cats = null;
     snap.docs.forEach(d => { const v = d.data(); if (!v) return; if (d.id === "_settings") cats = v.cats; else next[d.id] = { ...v, id: d.id }; });
     setCats(cats);
     state.items = next; state.mode = "db";
-    if (!snap.metadata.fromCache) { first = false; state.slow = false; clearTimeout(timer); }
+    if (first && !snap.metadata.fromCache) {
+      first = false; state.slow = false; clearTimeout(timer);
+      migrateLocal(new Set(Object.keys(next)), !!cats);
+    }
     render();
   }, err => {
     clearTimeout(timer); first = false; state.slow = false;
-    if (state.mode !== "db") useLocal(); else { toast("De verbinding met je opslag is verbroken. Herlaad de pagina."); }
+    toast("De verbinding met je online agenda is verbroken. Herlaad de pagina."); render();
+  });
+}
+function stopSync() { if (unsubSync) unsubSync(); unsubSync = null; col = null; state.items = {}; state.mode = "loading"; }
+function loadScript(src) { return new Promise((ok, no) => { const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = no; document.head.appendChild(sc); }); }
+async function initStore() {
+  if (!window.firebase) {
+    // backup address for the Firebase files when the first one is unreachable
+    try { for (const f of ["app", "auth", "firestore"]) await loadScript(`https://cdn.jsdelivr.net/npm/firebase@10.12.2/firebase-${f}-compat.js`); } catch (e) {}
+  }
+  if (!initFirebase()) {
+    document.getElementById("login-err").textContent = "Kan geen verbinding maken. Controleer je internet en herlaad de pagina.";
+    document.getElementById("login-err").hidden = false;
+    lock();
+    return;
+  }
+  fbAuth.onAuthStateChanged(user => {
+    if (user) { unlock(); startSync(user.uid); }
+    else { stopSync(); lock(); }
   });
 }
 
@@ -1232,7 +1269,7 @@ document.addEventListener("click", e => {
   else if (act === "view") setView(a.dataset.view);
   else if (act === "prev") slide(-1);
   else if (act === "next") slide(1);
-  else if (act === "logout") { try { localStorage.removeItem(LS_LOGIN); sessionStorage.removeItem(LS_LOGIN); } catch (e) {} closeModal(); lock(); }
+  else if (act === "logout") { closeModal(); if (fbAuth) fbAuth.signOut(); else lock(); }
   else if (act === "pw-toggle") { const i = document.getElementById("l-pass"); i.type = i.type === "password" ? "text" : "password"; a.textContent = i.type === "password" ? "Toon" : "Verberg"; }
   else if (act === "today") { state.cursor = todayKey(); render(); }
   else if (act === "goto") { state.cursor = a.dataset.date; setView("dag"); }
@@ -1458,31 +1495,29 @@ function slide(dir, fromX) {
 })();
 
 /* ---------- login ---------- */
-const LOGIN_HASH = "d6803b52ab9f3b8b6d5f5cbbb530d38f8cd71393c78dcb7a5020398e0304f110";
-const LS_LOGIN = "agenda-login-v1";
-async function sha256(t) {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
-  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
-}
 function lock() { document.body.classList.add("locked"); document.getElementById("login").hidden = false; setTimeout(() => document.getElementById("l-user").focus(), 50); }
 function unlock() { document.body.classList.remove("locked"); document.getElementById("login").hidden = true; }
-(() => {
-  let ok = false; try { ok = localStorage.getItem(LS_LOGIN) === LOGIN_HASH || sessionStorage.getItem(LS_LOGIN) === LOGIN_HASH; } catch (e) {}
-  if (ok) unlock(); else lock();
-  document.getElementById("login-form").addEventListener("submit", async e => {
-    e.preventDefault(); e.stopPropagation();
-    const f = e.target, u = f.elements.username.value.trim().toLowerCase(), pw = f.elements.password.value;
-    let h = ""; try { h = await sha256(u + ":" + pw); } catch (err) {}
-    if (h === LOGIN_HASH) {
-      try { (document.getElementById("l-remember").checked ? localStorage : sessionStorage).setItem(LS_LOGIN, h); } catch (err) {}
-      f.reset(); document.getElementById("login-err").hidden = true; unlock(); toast("Hoi Maya, fijn dat je er bent!");
-    } else {
-      document.getElementById("login-err").hidden = false;
-      f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake");
-      f.elements.password.value = ""; f.elements.password.focus();
-    }
-  }, true);
-})();
+document.body.classList.add("locked"); // wait for the login check before showing the planning
+document.getElementById("login-form").addEventListener("submit", async e => {
+  e.preventDefault(); e.stopPropagation();
+  const f = e.target, err = document.getElementById("login-err"), btn = f.querySelector(".btn.primary");
+  const email = f.elements.username.value.trim(), pw = f.elements.password.value;
+  if (!initFirebase()) { err.textContent = "Kan geen verbinding maken. Controleer je internet en herlaad de pagina."; err.hidden = false; return; }
+  btn.disabled = true; btn.textContent = "Bezig met inloggen…"; err.hidden = true;
+  try {
+    await fbAuth.setPersistence(document.getElementById("l-remember").checked ? firebase.auth.Auth.Persistence.LOCAL : firebase.auth.Auth.Persistence.SESSION);
+    await fbAuth.signInWithEmailAndPassword(email, pw);
+    f.reset(); toast("Hoi Maya, fijn dat je er bent!");
+  } catch (ex) {
+    const c = ex && ex.code || "";
+    err.textContent = c.includes("network") ? "Geen internetverbinding. Probeer het opnieuw zodra je online bent."
+      : c.includes("too-many-requests") ? "Te veel pogingen. Wacht een paar minuten en probeer het opnieuw."
+      : "E-mailadres of wachtwoord klopt niet. Probeer het opnieuw.";
+    err.hidden = false;
+    f.classList.remove("shake"); void f.offsetWidth; f.classList.add("shake");
+    f.elements.password.value = ""; f.elements.password.focus();
+  } finally { btn.disabled = false; btn.textContent = "Inloggen"; }
+}, true);
 
 render();
 initStore();
