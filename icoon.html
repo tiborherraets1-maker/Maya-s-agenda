@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Icoon maken</title>
+<style>
+  :root { --bg: #E4ECE5; --surface: #FFFFFF; --ink: #1F2A23; --muted: #627068; --accent: #3F8A63; --line: #D2DED5; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 -apple-system, system-ui, sans-serif; }
+  main { max-width: 480px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-right)) 40px max(16px, env(safe-area-inset-left)); display: grid; gap: 16px; }
+  h1 { font-size: 24px; margin: 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px; display: grid; gap: 12px; justify-items: center; text-align: center; }
+  img { width: 180px; height: 180px; border-radius: 40px; box-shadow: 0 4px 14px rgb(0 0 0 / .15); }
+  a.btn { display: block; width: 100%; box-sizing: border-box; text-align: center; background: var(--accent); color: #fff; text-decoration: none; font-weight: 700; padding: 13px; border-radius: 999px; }
+  a.btn.sec { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+  ol { margin: 0; padding-left: 20px; text-align: left; color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🐝 Icoon maken</h1>
+  <div class="card">
+    <img id="preview" alt="Voorbeeld van het icoon">
+    <a class="btn" id="dl180" download="apple-touch-icon.png">1. Download apple-touch-icon.png</a>
+    <a class="btn sec" id="dl192" download="icon-192.png">2. Download icon-192.png</a>
+    <a class="btn sec" id="dl512" download="icon-512.png">3. Download icon-512.png</a>
+  </div>
+  <div class="card">
+    <ol>
+      <li>Tik op de drie knoppen hierboven. De bestanden komen in de app <b>Bestanden</b>, map <b>Downloads</b>.</li>
+      <li>Ga op GitHub naar je repository, <b>Add file → Upload files</b>, en kies de drie bestanden uit Bestanden.</li>
+      <li>Tik op <b>Commit changes</b> en wacht op het groene vinkje.</li>
+      <li>Verwijder het oude icoon van je beginscherm en zet de agenda opnieuw op je beginscherm.</li>
+    </ol>
+  </div>
+</main>
+<script>
+  // Draws the icon with this phone's own bee emoji (on an iPhone: the Apple bee).
+  // iPhones cannot draw emoji bigger than about 160px on a canvas, so draw it at 120px and scale up.
+  function bee() {
+    var b = document.createElement("canvas"); b.width = b.height = 150;
+    var x = b.getContext("2d"); x.textAlign = "center"; x.textBaseline = "middle";
+    x.font = "120px 'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif";
+    x.fillText("\uD83D\uDC1D", 75, 80);
+    return b;
+  }
+  function make(S) {
+    var c = document.createElement("canvas"); c.width = c.height = S;
+    var g = c.getContext("2d"), r = g.createRadialGradient(S * .3, S * .25, S * .05, S * .5, S * .5, S * .75);
+    r.addColorStop(0, "#5BA67E"); r.addColorStop(.6, "#3F8A63"); r.addColorStop(1, "#336F50");
+    g.fillStyle = r; g.fillRect(0, 0, S, S);
+    g.drawImage(bee(), S * .17, S * .19, S * .66, S * .66);
+    return c.toDataURL("image/png");
+  }
+  var a = make(180);
+  document.getElementById("preview").src = a;
+  document.getElementById("dl180").href = a;
+  document.getElementById("dl192").href = make(192);
+  document.getElementById("dl512").href = make(512);
+</script>
+</body>
+</html>
